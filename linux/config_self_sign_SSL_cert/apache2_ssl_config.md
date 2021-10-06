@@ -76,9 +76,9 @@ sudo service apache2 restart # 重启服务
 ```
 
 # windows端保存证书
-点击地址栏感叹号按钮，导出证书再安装证书即可
-![入口](export_cert.png)
-![保存证书](save_cert.png)
+点击地址栏感叹号按钮，导出证书再安装证书即可  
+![入口](export_cert.png)  
+![保存证书](save_cert.png)  
 # 参考
 https://www.dyxmq.cn/network/create-self-sign-ca-and-certificate.html
 https://blog.csdn.net/weixin_33804582/article/details/91600006
