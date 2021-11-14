@@ -1,4 +1,8 @@
-
+---
+layout: post
+title: "ubuntu下配置samba"
+categories: linux service
+---
 ### 安装环境
 ```
 t@t:~$ cat /proc/version
