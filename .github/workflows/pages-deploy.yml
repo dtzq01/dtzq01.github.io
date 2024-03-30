@@ -2,7 +2,6 @@ name: "Build and Deploy"
 on:
   push:
     branches:
-      - main
       - master
     paths-ignore:
       - .gitignore
@@ -23,51 +22,127 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-for-github:
+    environment:
+      name: github-repo
+      url: "${{ vars.CURRENT_REPO }}"
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
           # submodules: true
           # If using the 'assets' git submodule from Chirpy Starter, uncomment above
           # (See: https://github.com/cotes2020/chirpy-starter/tree/main/assets)
-
       - name: Setup Pages
         id: pages
-        uses: actions/configure-pages@v4
-
+        uses: actions/configure-pages@v3
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: 3.2
+          ruby-version: 3   # reads from a '.ruby-version' or '.tools-version' file if 'ruby-version' is omitted
           bundler-cache: true
-
       - name: Build site
         run: bundle exec jekyll b -d "_site${{ steps.pages.outputs.base_path }}"
         env:
           JEKYLL_ENV: "production"
-
       - name: Test site
         run: |
-          bundle exec htmlproofer _site \
-            \-\-disable-external=true \
-            \-\-ignore-urls "/^http:\/\/127.0.0.1/,/^http:\/\/0.0.0.0/,/^http:\/\/localhost/"
-
+          bundle exec htmlproofer _site --disable-external --check-html --allow_hash_href
       - name: Upload site artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v1
         with:
           path: "_site${{ steps.pages.outputs.base_path }}"
 
-  deploy:
+  deploy-on-github:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: build
+    needs: build-for-github
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v2
+
+  # 参考: https://zhuanlan.zhihu.com/p/353862378
+  build-for-gitee:
+    environment:
+      name: github-repo
+      url: "${{ vars.CURRENT_REPO_PAGE }}"
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        # submodules: true
+        # If using the 'assets' git submodule from Chirpy Starter, uncomment above
+        # (See: https://github.com/cotes2020/chirpy-starter/tree/main/assets)
+    - name: Setup Pages
+      id: pages
+      uses: actions/configure-pages@v3
+    - name: Setup Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 3   # reads from a '.ruby-version' or '.tools-version' file if 'ruby-version' is omitted
+        bundler-cache: true
+    - name: Build site
+      run: bundle exec jekyll b -d "_site"
+      env:
+        JEKYLL_ENV: "production"
+    - name: Configure SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.RSA_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan github.com >> ~/.ssh/known_hosts
+    - name: Handle Git branch
+      run: |
+        git config --local user.name "${{ vars.BOT_NAME }}"
+        git config --local user.email "${{ vars.BOT_EMAIL }}"
+        git checkout -b page
+        shopt -s extglob
+        rm -rf !(_site)
+        cp -R _site/* .
+        ls
+        git add .
+        git commit -m "${{ vars.BOT_COMMIT_MSG }}"
+        git push -f "${{ vars.CURRENT_REPO_SSH }}" page --set-upstream
+
+  sync-to-gitee:
+    environment:
+      name: gitee-repo
+      url: "${{ vars.GITEE_REPO }}"
+    runs-on: ubuntu-latest
+    needs: build-for-gitee
+    steps:
+    - name: Sync to Gitee
+      uses: wearerequired/git-mirror-action@master
+      env:
+        SSH_PRIVATE_KEY: ${{ secrets.RSA_PRIVATE_KEY }}
+      with:
+        # 来源仓库
+        source-repo: "${{ vars.CURRENT_REPO_SSH }}"
+        # 目标仓库
+        destination-repo: "${{ vars.GITEE_REPO_SSH }}"
+
+  reload-gitee-pages:
+    environment:
+      name: gitee-pages
+      url: "${{ vars.GITEE_PAGE_URL }}"
+    runs-on: ubuntu-latest
+    needs: sync-to-gitee
+    steps:
+      - name: Build Gitee Pages
+        uses: yanglbme/gitee-pages-action@master
+        with:
+          # Settings -> Secrets 配置 GITEE_USERNAME
+          gitee-username: ${{ vars.GITEE_USERNAME }}
+          # Settings -> Secrets 配置 GITEE_PASSWORD
+          gitee-password: ${{ secrets.GITEE_PASSWORD }}
+          # 注意替换为你的 Gitee 仓库, 仓库名严格区分大小写, 请准确填写, 否则会出错
+          gitee-repo: ${{ vars.GITEE_REPO_SIMPLE }}
+          # 要部署的分支, 默认是 master, 若是其他分支, 则需要指定(指定的分支必须存在)
+          branch: page
