@@ -48,8 +48,10 @@ tags: grammar
 
 ## 图片
 图片的语法与链接类似，但前面加一个感叹号。
-
-![Alt text](/path/to/img.jpg)
+```markdown
+![入口]({{  site.url }}/img/2021-08-15-how-to-config-self-sign-SSL-cert/export_cert.png)  
+```
+![入口]({{  site.url }}/img/2021-08-15-how-to-config-self-sign-SSL-cert/export_cert.png)  
 
 ## 引用
 引用文本前使用 > 符号。
